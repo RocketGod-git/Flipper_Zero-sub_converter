@@ -12,6 +12,19 @@ SIGNAL_FILE_EXTENSIONS_BY_TYPE = {
     "complex64": (np.complex64, ".complex"),
 }
 
+def decode_manchester(raw_data):
+    decoded_data = []
+
+    for i in range(0, len(raw_data), 2):
+        if raw_data[i] == 1 and raw_data[i + 1] == 0:
+            decoded_data.append(0)
+        elif raw_data[i] == 0 and raw_data[i + 1] == 1:
+            decoded_data.append(1)
+        else:
+            raise ValueError(f"Invalid Manchester encoding in raw data at position {i}")
+
+    return decoded_data
+
 def read_sub_file(input_file):
     with open(input_file, 'r') as f:
         content = f.readlines()
@@ -59,7 +72,8 @@ def read_sub_file(input_file):
             break
 
     if raw_data and frequency and preset:
-        return frequency, preset, raw_data, sample_rate, center_frequency
+        decoded_data = decode_manchester(raw_data) # Add this line to decode Manchester-encoded data
+        return frequency, preset, decoded_data, sample_rate, center_frequency
     else:
         raise ValueError(f'Invalid .sub file format: {input_file}')
 
