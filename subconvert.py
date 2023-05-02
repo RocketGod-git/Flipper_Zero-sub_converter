@@ -13,6 +13,9 @@ SIGNAL_FILE_EXTENSIONS_BY_TYPE = {
 }
 
 def decode_manchester(raw_data):
+    if len(raw_data) < 2 or len(raw_data) % 2 != 0:
+        raise ValueError("Invalid Manchester encoding: length of raw data must be even and contain at least two bits.")
+
     decoded_data = []
 
     for i in range(0, len(raw_data), 2):
