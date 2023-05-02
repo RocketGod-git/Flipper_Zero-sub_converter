@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import argparse
+import re
 
 SIGNAL_FILE_EXTENSIONS_BY_TYPE = {
     "int8": (np.int8, ".complex16s"),
@@ -11,53 +12,66 @@ SIGNAL_FILE_EXTENSIONS_BY_TYPE = {
     "complex64": (np.complex64, ".complex"),
 }
 
-def read_sub_file(filename):
-    # Check if the file has the .sub extension
-    if not filename.lower().endswith(".sub"):
-        raise ValueError(f"Invalid file extension: {filename}. Expected a .sub file.")
+def read_sub_file(input_file):
+    with open(input_file, 'r') as f:
+        content = f.readlines()
 
-    with open(filename, "r") as file:
-        lines = file.readlines()
+    # Remove leading/trailing whitespaces from each line
+    content = [line.strip() for line in content]
 
+    # Find frequency
+    frequency = None
+    for line in content:
+        if line.startswith('Frequency:'):
+            frequency = int(line.split(':')[1].strip())
+            break
+
+    # Find preset
     preset = None
+    for line in content:
+        if line.startswith('Preset:'):
+            preset = line.split(':')[1].strip()
+            break
+
+    # Find raw data
     raw_data = []
+    for line in content:
+        if line.startswith('RAW_Data:'):
+            raw_data = list(map(int, line.split(':')[1].strip().split()))
+            break
+        elif line.startswith('Key:'):
+            key = line.split(':')[1].strip().replace(' ', '')
+            raw_data = [int(key[i:i+2], 16) for i in range(0, len(key), 2)]
+            break
+
+    # Find sample rate
     sample_rate = None
+    for line in content:
+        if line.startswith('TE:'):
+            sample_rate = int(line.split(':')[1].strip())
+            break
+
+    # Find center frequency
     center_frequency = None
+    for line in content:
+        if line.startswith('CenterFrequency:'):
+            center_frequency = int(line.split(':')[1].strip())
+            break
 
-    for line in lines:
-        if line.startswith("Frequency:"):
-            center_frequency = int(line.split(":")[1].strip())
-        elif line.startswith("Preset:"):
-            preset = line.split(":")[1].strip()
-        elif line.startswith("RAW_Data:"):
-            raw_data.extend(map(int, line.split(":")[1].strip().split()))
-        elif line.startswith("Key:"):
-            raw_data.extend(int(x, 16) for x in line.split(":")[1].strip().split())
-        elif line.startswith("TE:"):
-            sample_rate = int(line.split(":")[1].strip())
+    if raw_data and frequency and preset:
+        return frequency, preset, raw_data, sample_rate, center_frequency
+    else:
+        raise ValueError(f'Invalid .sub file format: {input_file}')
 
-    if preset is None or sample_rate is None or center_frequency is None or not raw_data:
-        raise ValueError(f"Invalid .sub file format: {filename}")
+def convert_sub_to_signal_file(input_path, output_path, output_format):
+    frequency, preset, raw_data, sample_rate, center_frequency = read_sub_file(input_path)
 
-    return center_frequency, preset, raw_data, sample_rate, center_frequency
+    complex_data = convert_sub_to_signal(raw_data, output_format)
+    write_signal_file(output_path, complex_data, output_format)
+    print(f"Converted {input_path} to {output_path}")
 
-def convert_sub_to_signal_file(input_file, output_file, dtype, file_extension=None):
-    frequency, preset, raw_data = read_sub_file(input_file)
-
-    if dtype not in SIGNAL_FILE_EXTENSIONS_BY_TYPE:
-        raise ValueError(f"Unsupported data type: {dtype}")
-
-    np_dtype, default_file_extension = SIGNAL_FILE_EXTENSIONS_BY_TYPE[dtype]
-
-    if file_extension is None:
-        file_extension = default_file_extension
-
-    output_path = os.path.splitext(output_file)[0] + file_extension
-
-    data = convert_sub_to_signal(raw_data, dtype)
-    data.tofile(output_path)
-
-    print(f"Converted {input_file} to {output_path}")
+    # Write accompanying .txt file
+    write_accompanying_txt_file(output_path, frequency, sample_rate)
 
 def convert_sub_to_signal(raw_data, dtype):
     if dtype == "int8":
@@ -112,6 +126,15 @@ def write_accompanying_txt_file(output_path, frequency, sample_rate=500000):
 
     print(f"Created accompanying .txt file: {txt_filename}")
 
+def write_signal_file(output_path, data, output_format):
+    dtype, extension = SIGNAL_FILE_EXTENSIONS_BY_TYPE[output_format]
+    output_path_with_extension = output_path + extension
+
+    with open(output_path_with_extension, 'wb') as f:
+        data.tofile(f)
+
+    print(f"Saved data to {output_path_with_extension}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Convert a .sub file to a specified signal file format."
@@ -143,14 +166,13 @@ if __name__ == "__main__":
 
     try:
         convert_sub_to_signal_file(
-            args.input_file,
-            args.output_file,
-            args.dtype,
-            file_extension=args.file_extension,
-        )
+        args.input_file,
+        args.output_file,
+        args.dtype
+    )
+
         _, _, _, sample_rate, center_frequency = read_sub_file(args.input_file)
-        output_path = os.path.splitext(args.output_file)[0] + SIGNAL_FILE_EXTENSIONS_BY_TYPE[args.dtype][1]
-        write_accompanying_txt_file(output_path, center_frequency, sample_rate)
+
     except (OSError, ValueError) as e:
         print(f"Error: {e}")
         exit(1)
