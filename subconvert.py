@@ -28,8 +28,17 @@ def decode_manchester(raw_data):
 def hex_to_binary(hex_string):
     return [int(b) for b in ''.join(format(int(byte, 16), '08b') for byte in hex_string.split())]
 
-def hex_to_binary(hex_string):
-    return [int(b) for b in ''.join(format(int(byte, 16), '08b') for byte in hex_string.split())]
+def hex_to_ook(hex_string):
+    binary_data = hex_to_binary(hex_string)
+    ook_data = []
+
+    for bit in binary_data:
+        if bit == 1:
+            ook_data.extend([1, 0])
+        else:
+            ook_data.extend([0, 1])
+
+    return ook_data
 
 def read_sub_file(input_file):
     with open(input_file, 'r') as f:
@@ -96,50 +105,55 @@ def read_sub_file(input_file):
     with open(input_file, 'r') as f:
         content = f.readlines()
 
-    # Remove leading/trailing whitespaces from each line
     content = [line.strip() for line in content]
 
-    # Find frequency
     frequency = None
     for line in content:
         if line.startswith('Frequency:'):
             frequency = int(line.split(':')[1].strip())
             break
 
-    # Find preset
     preset = None
     for line in content:
         if line.startswith('Preset:'):
             preset = line.split(':')[1].strip()
             break
 
-    # Find raw data
     raw_data = []
+    key = None
     for line in content:
         if line.startswith('RAW_Data:'):
             raw_data = list(map(int, line.split(':')[1].strip().split()))
             break
         elif line.startswith('Key:'):
             key = line.split(':')[1].strip().replace(' ', '')
-            raw_data = [int(key[i:i+2], 16) for i in range(0, len(key), 2)]
+            raw_data = hex_to_ook(key)
             break
 
-    # Find sample rate
     sample_rate = None
     for line in content:
         if line.startswith('TE:'):
             sample_rate = int(line.split(':')[1].strip())
             break
 
-    # Find center frequency
     center_frequency = None
     for line in content:
         if line.startswith('CenterFrequency:'):
             center_frequency = int(line.split(':')[1].strip())
             break
 
+    protocol = None
+    for line in content:
+        if line.startswith('Protocol:'):
+            protocol = line.split(':')[1].strip()
+            break
+
     if raw_data and frequency and preset:
-        decoded_data = decode_manchester(raw_data) # Add this line to decode Manchester-encoded data
+        if protocol == "Manchester":
+            decoded_data = decode_manchester(raw_data)
+        else:
+            decoded_data = raw_data
+
         return frequency, preset, decoded_data, sample_rate, center_frequency
     else:
         raise ValueError(f'Invalid .sub file format: {input_file}')
