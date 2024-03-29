@@ -1,4 +1,5 @@
-# Flipper_Zero-sub_converter
+# THIS IS CURRENTLY BROKEN
+
 Python script to convert .sub files to other usable subghz files
 
 First do:<br>
